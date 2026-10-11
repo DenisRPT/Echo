@@ -1,11 +1,11 @@
 #pragma once
 #include "core/Window.h"
-#include "graphics/Shader.h"
+#include "graphics/Renderer2D.h"
+#include "graphics/Texture.h"
 
 class Application{
 public:
     Application();
-    ~Application();
 
     Application(const Application&) = delete;
     Application& operator=(const Application&) = delete;
@@ -18,8 +18,8 @@ private:
     void render();
 
     Window m_window;
-    Shader m_shader;
+    Renderer2D m_renderer;
+	Texture m_checker;
 
-    unsigned int m_vao = 0;
-    unsigned int m_vbo = 0;
+    float m_time = 0.0f;
 };

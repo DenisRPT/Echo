@@ -2,34 +2,38 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 #include <iostream>
 
-//checkboard texture for testing
-Texture makeCheckerTexture() {
-    constexpr int N = 8;
-    std::vector<unsigned char> pixels(N * N * 4);
-    for (int y = 0; y < N; ++y) {
-        for (int x = 0; x < N; ++x) {
-			const bool light = ((x + y) % 2 == 0);
-            const unsigned char v = light ? 255 : 70;
-            const std::size_t i = static_cast<std::size_t>(y * N + x) * 4;
-			pixels[i + 0] = v;
-			pixels[i + 1] = v;
-			pixels[i + 2] = v;
-			pixels[i + 3] = 255;
+namespace {
+	//make a soft white circle texture
+    Texture makeSoftCircle(int n) {
+		std::vector<unsigned char> pixels(static_cast<std::size_t>(n) * n * 4);
+        for (int y = 0; y < n; ++y) {
+            for (int x = 0; x < n; ++x) {
+				const float u = (x + 0.5f) / n * 2.0f - 1.0f;
+				const float v = (y + 0.5f) / n * 2.0f - 1.0f;
+				float a = std::clamp(1.0f - std::sqrt(u * u + v * v), 0.0f, 1.0f);
+                a *= a;
+				const std::size_t i = static_cast<std::size_t>(y * n + x) * 4;
+                pixels[i + 0] = 255;
+                pixels[i + 1] = 255;
+                pixels[i + 2] = 255;
+				pixels[i + 3] = static_cast<unsigned char>(a * 255.0f + 0.5f);
+            }
         }
+		return Texture(n, n, pixels.data(), Texture::Filter::Linear);
     }
-	return Texture(N, N, pixels.data(), Texture::Filter::Nearest);
 }
 
 
 Application::Application()
-    : m_window(1280, 720, "Ecou"),
+    : m_window(1280, 720, "Echo"),
     m_renderer(),
-    m_checker(makeCheckerTexture()) {
+    m_glow(makeSoftCircle(64)) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
@@ -51,15 +55,19 @@ void Application::run(){
         if(frameTime > kMaxFrame) frameTime = kMaxFrame;
 
         accumulator += frameTime;
+
         m_window.pollEvents();
-        processInput();
+		m_input.update(m_window); // once per frame
+		processInput(); // one shot input events
 
         while(accumulator >= kFixedStep){
             update(static_cast<float>(kFixedStep));
             accumulator -= kFixedStep;
         }
 
-        render();
+		
+		const float alpha = static_cast<float>(accumulator / kFixedStep); //interpolation factor for rendering
+        render(alpha);
         m_window.swapBuffers();
 
         ++frames;
@@ -78,31 +86,43 @@ void Application::run(){
 void Application::processInput() {
     if(m_window.keyDown(GLFW_KEY_ESCAPE))
         m_window.close();
+    if(m_input.pressed(GLFW_KEY_SPACE))
+		m_camera.addTrauma(0.6f);
 }
 
 void Application::update(float dt){
     m_time += dt;
+	m_player.update(dt, m_input);
+    m_camera.update(dt, m_player.position());
 
 }
 
-void Application::render() {
+void Application::render(float alpha) {
     glClearColor(0.01f , 0.01f, 0.02f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    const float halfH = 10.0f;
-	const float halfW = halfH * m_window.aspect();
-    const glm::mat4 proj = glm::ortho(-halfW, halfW, -halfH, halfH);
+    m_renderer.begin(m_camera.viewProjection(m_window.aspect(), alpha));
 
-    m_renderer.begin(proj);
+    const glm::vec2 p = m_player.position(alpha);
+    constexpr float kSpacing = 2.0f;
+    constexpr float kRadius = 14.0f;
 
-    for (int x = 0; x < 50; ++x) {
-        for (int y = 0; y < 30; ++y) {
-			const float wave = 0.5f + 0.5f * std::sin(m_time * 2.0f + x*0.3f + y*0.2f);
-            const glm::vec2 pos((x - 24.5f) * 0.6f, (y - 14.5f) * 0.6f);
-            m_renderer.drawQuad(pos, { 0.5f, 0.5f }, { 0.1f,0.3f + 0.6f * wave,1.0f,1.0f });
+	const int minX = static_cast<int>(std::floor((p.x - kRadius) / kSpacing));
+	const int maxX = static_cast<int>(std::ceil((p.x + kRadius) / kSpacing));
+	const int minY = static_cast<int>(std::floor((p.y - kRadius) / kSpacing));
+	const int maxY = static_cast<int>(std::ceil((p.y + kRadius) / kSpacing));
+
+    for (int gx = minX; gx <= maxX; ++gx) {
+        for (int gy = minY; gy <= maxY; ++gy) {
+			const glm::vec2 pos(gx * kSpacing, gy * kSpacing);
+			const float d = glm::length(pos - p);
+			if (d >= kRadius) continue;
+
+			float a = 1.0f - d / kRadius;
+            a = a * a * 0.8f;
+			m_renderer.drawQuad(pos, glm::vec2(0.18f), glm::vec4(0.3f, 0.6f, 1.0f, a), 0.0f, &m_glow);
         }
     }
-
-	m_renderer.drawQuad({ 0.0f, 0.0f }, { 5.0f, 5.0f }, { 1.0f,0.8f,0.3f,0.9f }, m_time, &m_checker);
+	m_player.draw(m_renderer, m_glow, alpha, m_time);
     m_renderer.end();
 }

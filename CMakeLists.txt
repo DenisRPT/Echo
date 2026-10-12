@@ -33,6 +33,7 @@ source_group(TREE ${CMAKE_SOURCE_DIR}/shaders PREFIX "shaders" FILES ${ECHO_SHAD
 
 target_include_directories(Echo PRIVATE src)
 target_link_libraries(Echo PRIVATE glfw glad glm::glm)
+target_compile_definitions(Echo PRIVATE GLFW_INCLUDE_NONE)
 
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Echo)
 set_target_properties(Echo PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

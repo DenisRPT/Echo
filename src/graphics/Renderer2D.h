@@ -10,7 +10,7 @@ class Renderer2D {
 public:
 	struct Stats {
 		std::uint32_t drawCalls = 0;
-		std::uint8_t quads = 0;
+		std::uint32_t quads = 0;
 	};
 
 	explicit  Renderer2D(std::size_t maxQuads = 10000);

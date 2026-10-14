@@ -24,5 +24,5 @@ private:
 	float m_zoom = 1.0f;
 	float m_trauma = 0.0f;
 	float m_time = 0.0f;
-	float m_sharpness = 6.0f; //how tight the camera follows the target
+	float m_sharpness = 3.0f; //how tight the camera follows the target
 };

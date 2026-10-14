@@ -1,14 +1,17 @@
 #include "game/Player.h"
 #include "core/Input.h"
+#include "game/TileMap.h"
 #include "graphics/Renderer2D.h"
 #include "graphics/Texture.h"
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <algorithm>
 #include <cmath>
 
 namespace {
 	constexpr float kAccel = 48.0f;
 	constexpr float kDrag = 6.0f;
+	constexpr float kEps = 0.0001f;
 }
 
 Player::Player(const glm::vec2& start) : m_position(start), m_prevPosition(start) {}
@@ -17,7 +20,19 @@ glm::vec2 Player::position(float alpha) const {
 	return::glm::mix(m_prevPosition, m_position, alpha);
 }
 
-void Player::update(float dt, const Input& input) {
+void Player::teleport(const glm::vec2& position) {
+	m_position = m_prevPosition = position;
+	m_velocity = glm::vec2(0.0f);
+	m_impact = 0.0f;
+}
+
+float Player::takeImpact() {
+	const float v = m_impact;
+	m_impact = 0.0f;
+	return v;
+}
+
+void Player::update(float dt, const Input& input, const TileMap& map) {
 	glm::vec2 dir(0.0f);
 	if (input.down(GLFW_KEY_W) || input.down(GLFW_KEY_UP)) dir.y += 1.0f;
 	if (input.down(GLFW_KEY_S) || input.down(GLFW_KEY_DOWN)) dir.y -= 1.0f;
@@ -30,7 +45,43 @@ void Player::update(float dt, const Input& input) {
 	m_prevPosition = m_position;
 	m_velocity += dir * kAccel * dt;
 	m_velocity *= std::exp(-kDrag * dt); 
-	m_position += m_velocity * dt;
+	//m_position += m_velocity * dt;
+
+	moveAxis(0, dt, map);
+	moveAxis(1, dt, map);
+}
+
+void Player::moveAxis(int axis, float dt, const TileMap& map) {
+	const float delta = m_velocity[axis] * dt;
+	if (delta == 0.0f) return;
+
+	glm::vec2 next = m_position;
+	next[axis] += delta;
+	float target = next[axis];
+
+	const int minX = static_cast<int>(std::floor(next.x - kHalfSize));
+	const int maxX = static_cast<int>(std::floor(next.x + kHalfSize));
+	const int minY = static_cast<int>(std::floor(next.y - kHalfSize));
+	const int maxY = static_cast<int>(std::floor(next.y + kHalfSize));
+
+	for (int ty = minY; ty <= maxY; ++ty) {
+		for (int tx = minX; tx <= maxX; ++tx) {
+			if (!map.isSolid(tx, ty)) continue;
+
+			const float tile = static_cast<float>(axis == 0 ? tx : ty);
+			if(delta > 0.0f) {
+				target = std::min(target, tile - kHalfSize - kEps);
+			} else {
+				target = std::max(target, tile + 1.0f + kHalfSize + kEps);
+			}
+		}
+	}
+
+	if (target != next[axis]) {   // wall
+		m_impact = std::max(m_impact, std::abs(m_velocity[axis]));
+		m_velocity[axis] = 0.0f;
+	}
+	m_position[axis] = target;
 }
 
 void Player::draw(Renderer2D& renderer, const Texture& glow, float alpha, float time) const {

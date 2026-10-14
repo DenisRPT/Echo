@@ -4,11 +4,17 @@
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <random>
 #include <string>
 #include <vector>
 #include <iostream>
 
 namespace {
+
+    std::uint32_t randomSeed() {
+		return static_cast<std::uint32_t>(std::random_device{}());
+    }
 	//make a soft white circle texture
     Texture makeSoftCircle(int n) {
 		std::vector<unsigned char> pixels(static_cast<std::size_t>(n) * n * 4);
@@ -33,9 +39,22 @@ namespace {
 Application::Application()
     : m_window(1280, 720, "Echo"),
     m_renderer(),
-    m_glow(makeSoftCircle(64)) {
+    m_glow(makeSoftCircle(64)),
+    m_map(96,64,randomSeed()),
+    m_player(m_map.spawnPoint()){
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	
+
+    m_camera.snapTo(m_map.spawnPoint());
+	std::cout << "Map seed: " << m_map.seed() << std::endl;
+}
+
+void Application::newWorld(std::uint32_t seed) {
+    m_map.generate(seed);
+	m_player.teleport(m_map.spawnPoint());
+	m_camera.snapTo(m_map.spawnPoint());
+	std::cout << "Map seed: " << m_map.seed() << std::endl;
 }
 
 
@@ -86,13 +105,21 @@ void Application::run(){
 void Application::processInput() {
     if(m_window.keyDown(GLFW_KEY_ESCAPE))
         m_window.close();
+
     if(m_input.pressed(GLFW_KEY_SPACE))
 		m_camera.addTrauma(0.6f);
+
+    if (m_input.pressed(GLFW_KEY_R))
+        newWorld(randomSeed());
 }
 
 void Application::update(float dt){
     m_time += dt;
-	m_player.update(dt, m_input);
+	m_player.update(dt, m_input,m_map);
+    const float impact = m_player.takeImpact();
+    if (impact > 3.0f) {
+		m_camera.addTrauma(std::min(0.35f,impact* 0.04f));
+    }
     m_camera.update(dt, m_player.position());
 
 }
@@ -103,26 +130,8 @@ void Application::render(float alpha) {
 
     m_renderer.begin(m_camera.viewProjection(m_window.aspect(), alpha));
 
-    const glm::vec2 p = m_player.position(alpha);
-    constexpr float kSpacing = 2.0f;
-    constexpr float kRadius = 14.0f;
-
-	const int minX = static_cast<int>(std::floor((p.x - kRadius) / kSpacing));
-	const int maxX = static_cast<int>(std::ceil((p.x + kRadius) / kSpacing));
-	const int minY = static_cast<int>(std::floor((p.y - kRadius) / kSpacing));
-	const int maxY = static_cast<int>(std::ceil((p.y + kRadius) / kSpacing));
-
-    for (int gx = minX; gx <= maxX; ++gx) {
-        for (int gy = minY; gy <= maxY; ++gy) {
-			const glm::vec2 pos(gx * kSpacing, gy * kSpacing);
-			const float d = glm::length(pos - p);
-			if (d >= kRadius) continue;
-
-			float a = 1.0f - d / kRadius;
-            a = a * a * 0.8f;
-			m_renderer.drawQuad(pos, glm::vec2(0.18f), glm::vec4(0.3f, 0.6f, 1.0f, a), 0.0f, &m_glow);
-        }
-    }
+	m_map.draw(m_renderer, m_player.position(alpha), 14.0f);
 	m_player.draw(m_renderer, m_glow, alpha, m_time);
+
     m_renderer.end();
 }

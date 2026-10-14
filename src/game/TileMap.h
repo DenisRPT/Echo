@@ -17,6 +17,8 @@ public:
 
 	bool isSolid(int x, int y) const;
 
+	std::vector<unsigned char> toRGBA() const;
+
 	const glm::vec2& spawnPoint() const { return m_spawn; }
 	std::uint32_t seed() const { return m_seed; }
 

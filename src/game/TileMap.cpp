@@ -21,9 +21,20 @@ bool TileMap::isSolid(int x, int y) const {
 	return m_tiles[static_cast<std::size_t>(index(x, y))] == Wall;
 }
 
+std::vector<unsigned char> TileMap::toRGBA() const {
+	std::vector<unsigned char> pixels(m_tiles.size() * 4);
+	for (std::size_t i = 0; i < m_tiles.size(); ++i) {
+		pixels[i * 4 + 0] = (m_tiles[i] == Wall) ? 255 : 0;
+		pixels[i * 4 + 1] = 0;
+		pixels[i * 4 + 2] = 0;
+		pixels[i * 4 + 3] = 255;
+	}
+	return pixels;
+}
+
 void TileMap::generate(std::uint32_t seed) {
 	constexpr int kMaxAttempts = 50;
-	constexpr float kWallChance = 0.45f;
+	constexpr float kWallChance = 0.45;
 	constexpr int kSmoothSteps = 5;
 	const int minFloor = m_width * m_height / 4; // At least 25% of the map must be floor tiles
 

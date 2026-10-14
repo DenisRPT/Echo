@@ -10,8 +10,8 @@
 
 namespace {
 	constexpr float kAccel = 48.0f;
-	constexpr float kDrag = 6.0f;
-	constexpr float kEps = 0.0001f;
+	constexpr float kDrag = 4.5f;
+	constexpr float kEps = 0.001f;
 }
 
 Player::Player(const glm::vec2& start) : m_position(start), m_prevPosition(start) {}

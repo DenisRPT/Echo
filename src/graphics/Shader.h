@@ -21,6 +21,7 @@ public:
 	void setVec3(const std::string& name, const glm::vec3& value) const;
 	void setVec4(const std::string& name, const glm::vec4& value) const;
 	void setMat4(const std::string& name, const glm::mat4& value) const;
+	void setVec4v(const std::string& name, int count, const glm::vec4* values) const;
 
 	unsigned int id() const { return m_id; }
 

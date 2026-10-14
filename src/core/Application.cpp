@@ -33,33 +33,44 @@ namespace {
         }
 		return Texture(n, n, pixels.data(), Texture::Filter::Linear);
     }
+
+	//make a texture from the tilemap for sonar rendering
+    Texture makeMapTexture(const TileMap& map) {
+        const std::vector<unsigned char> pixels = map.toRGBA();
+		return Texture(map.width(), map.height(), pixels.data(), Texture::Filter::Nearest);
+    }
 }
 
 
 Application::Application()
     : m_window(1280, 720, "Echo"),
     m_renderer(),
+	m_sonarRenderer(),
     m_glow(makeSoftCircle(64)),
     m_map(96,64,randomSeed()),
+	m_mapTexture(makeMapTexture(m_map)),
     m_player(m_map.spawnPoint()){
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	
 
     m_camera.snapTo(m_map.spawnPoint());
+	m_sonar.emit(m_player.position()); // first sonar pulse at spawn
 	std::cout << "Map seed: " << m_map.seed() << std::endl;
 }
 
 void Application::newWorld(std::uint32_t seed) {
     m_map.generate(seed);
+	m_mapTexture = makeMapTexture(m_map);
 	m_player.teleport(m_map.spawnPoint());
 	m_camera.snapTo(m_map.spawnPoint());
+	m_sonar.clear();
+	m_sonar.emit(m_player.position());
 	std::cout << "Map seed: " << m_map.seed() << std::endl;
 }
 
 
 void Application::run(){
-    constexpr double kFixedStep = 1.0/120.0; //120hz
     constexpr double kMaxFrame = 0.25;
 
     double previous = glfwGetTime();
@@ -106,16 +117,23 @@ void Application::processInput() {
     if(m_window.keyDown(GLFW_KEY_ESCAPE))
         m_window.close();
 
-    if(m_input.pressed(GLFW_KEY_SPACE))
-		m_camera.addTrauma(0.6f);
+    if (m_input.pressed(GLFW_KEY_SPACE)) {
+        if (m_sonar.emit(m_player.position()))
+            m_camera.addTrauma(0.12f);
+    }
 
     if (m_input.pressed(GLFW_KEY_R))
         newWorld(randomSeed());
+
+    if (m_input.pressed(GLFW_KEY_F1))
+        m_debugView = !m_debugView;
 }
 
 void Application::update(float dt){
     m_time += dt;
 	m_player.update(dt, m_input,m_map);
+    m_sonar.update(dt);
+
     const float impact = m_player.takeImpact();
     if (impact > 3.0f) {
 		m_camera.addTrauma(std::min(0.35f,impact* 0.04f));
@@ -128,9 +146,15 @@ void Application::render(float alpha) {
     glClearColor(0.01f , 0.01f, 0.02f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    m_renderer.begin(m_camera.viewProjection(m_window.aspect(), alpha));
+	const glm::mat4 viewProj = m_camera.viewProjection(m_window.aspect(), alpha);
 
-	m_map.draw(m_renderer, m_player.position(alpha), 14.0f);
+    m_sonarRenderer.draw(m_sonar, m_mapTexture, viewProj, alpha * static_cast<float>(kFixedStep));
+
+    m_renderer.begin(viewProj);
+
+    if(m_debugView)
+        m_map.draw(m_renderer, m_player.position(alpha), 40.0f);
+
 	m_player.draw(m_renderer, m_glow, alpha, m_time);
 
     m_renderer.end();
